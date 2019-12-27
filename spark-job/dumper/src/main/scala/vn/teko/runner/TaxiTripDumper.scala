@@ -18,8 +18,8 @@ object TaxiTripDumper {
       .set("spark.sql.hive.convertMetastoreParquet", "true")
       .set("spark.sql.parquet.filterPushdown", "true")
       .set("spark.sql.cbo.enabled", "true")
-      .set("spark.es.nodes","<IP-OF-ES-NODE>")
-      .set("spark.es.port","<ES-PORT>")
+      .set("spark.es.nodes","elasticsearch")
+      .set("spark.es.port","9200")
       .setAppName(appName)
 
     implicit val session: SparkSession = SparkSession.builder()
