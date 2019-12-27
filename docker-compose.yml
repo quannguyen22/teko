@@ -1,0 +1,125 @@
+version: "3"
+
+services:
+  elasticsearch:
+    hostname: elasticsearch
+    image: "elasticsearch:7.5.1"
+    environment:
+      - cluster.name=es-cluster
+      - node.name=es-node-1
+      - path.data=/usr/share/elasticsearch/data
+      - http.port=9200
+      - http.host=0.0.0.0
+      - transport.host=127.0.0.1
+      - bootstrap.memory_lock=true
+    ports:
+      - '9200:9200'
+  kibana:
+    hostname: kibana
+    image: "kibana:7.5.1"
+    environment:
+      - SERVICE_PRECONDITION= "elasticsearch:9200"
+      - server.port=127.0.0.1:5601
+      - elasticsearch.url="http://elasticsearch:9200"
+      - server.name="kibana"
+    ports:
+      - '5601:5601'
+    depends_on:
+      - 'elasticsearch'
+  namenode:
+    image: teko/namenode
+    volumes:
+      - namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./teko.env
+    ports:
+      - "9870:9870"
+  datanode:
+    image: teko/datanode
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./teko.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    ports:
+      - "9864:9864"
+  hive-server:
+    image: teko/hive
+    env_file:
+      - ./teko.env
+    environment:
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+    volumes:
+      - ./data:/data
+    ports:
+      - "10000:10000"
+  hive-metastore:
+    image: teko/hive
+    env_file:
+      - ./teko.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864 mysql:3306"
+    ports:
+      - "9083:9083"
+  mysql:
+    image: mysql:5.7.25
+    environment:
+      MYSQL_ROOT_PASSWORD: "root"
+    volumes:
+      - ./mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+  presto-coordinator:
+    image: teko/prestodb
+    ports:
+      - "8080:8080"
+  presto-worker:
+    image: teko/prestodb
+    volumes:
+      - ./prestodb/worker/etc:/home/presto/etc
+  crawler:
+    image: teko/crawler
+    env_file:
+      - ./teko.env
+    volumes:
+      - ./data:/data
+    tty: true
+  spark-master:
+    image: teko/spark
+    env_file:
+      - ./teko.env
+    command: ./bin/spark-class org.apache.spark.deploy.master.Master -h spark-master
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864 hive-metastore:9083"
+    ports:
+      - "7077:7077"
+    volumes:
+      - ./spark/conf/master:/conf
+    ports:
+      - "8089:8080"
+  spark-worker:
+    image: teko/spark
+    env_file:
+      - ./teko.env
+    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864 hive-metastore:9083 spark-master:7077"
+    volumes:
+      - ./spark/conf/worker:/conf
+  spark-dumper:
+    image: teko/spark-dumper
+    env_file:
+      - ./teko.env
+    tty: true
+  spark-processor:
+    image: teko/spark-processor
+    env_file:
+      - ./teko.env
+    tty: true
+volumes:
+  namenode:
+  datanode:
